@@ -21,6 +21,10 @@ scripts in order instead of redoing everything by hand.
    (NordLynx/WireGuard). This is **not** a remote-access VPN into the LAN -
    it's the SBC acting as its own VPN client. (NordVPN Meshnet would be the
    tool for LAN remote-access instead, if that's ever wanted - not set up here.)
+5. **VPN gateway port** - the second NIC (`enp1s0`, 192.168.100.1/24) hands out
+   DHCP leases and NATs anything plugged into it out through the tunnel, with
+   Pi-hole as its DNS. Plug a device in and its traffic is VPN'd and ad-blocked,
+   with no client-side configuration.
 
 ## Rebuild steps (fresh SD card)
 
@@ -51,6 +55,10 @@ scripts in order instead of redoing everything by hand.
    NORDVPN_TOKEN='<token from my.nordaccount.com>' VPN_COUNTRY=South_Korea \
      bash scripts/04-nordvpn-setup.sh
    ```
+7. Optional - the VPN gateway port:
+   ```
+   VPN_COUNTRY=South_Korea bash scripts/05-vpn-gateway.sh
+   ```
 
 ## Secrets
 
@@ -61,6 +69,31 @@ Nothing in this repo contains real credentials. Keep your own copy of:
 
 in a local, gitignored file (see `secrets.env.example` for the shape) or your
 password manager - never commit them.
+
+## Troubleshooting
+
+Three non-obvious failure modes have bitten this box. All are handled by the
+scripts, but they're worth recognising:
+
+**"VPN connected" but no internet at all.** Restarting `systemd-networkd` (a
+`netplan apply` does this) **flushes the policy routing rules nordvpnd
+installed**. The tunnel interface stays up and `nordvpn status` still reports
+Connected, but nothing routes into it, and the kill switch then correctly
+blocks the leaked direct path - so you get zero connectivity. Check with
+`ip rule show`: if the `not from all fwmark 0xe1f1 lookup 205` rule is missing,
+that's it. Fix: `nordvpn disconnect && nordvpn connect`.
+
+**Ping works, DNS works, but every HTTPS request hangs.** MTU blackhole:
+NordLynx advertises MTU 1420 while the real path MTU is ~1390, so mid-sized
+packets vanish without any "fragmentation needed" error. Confirm by probing:
+`ping -M do -s 1360 1.1.1.1` succeeds while `-s 1372` fails. Fix is the udev
+rule in `04-nordvpn-setup.sh` clamping the tunnel to 1380, plus MSS clamping
+in `05-vpn-gateway.sh` for forwarded client traffic.
+
+**`apt` can't resolve hostnames while the VPN is up.** Nord's firewall drops
+DNS to any LAN address on purpose (anti-leak), so the router stops resolving
+for this box. Fix: point the system resolver at a public DNS directly, as
+`04-nordvpn-setup.sh` does.
 
 ## History
 

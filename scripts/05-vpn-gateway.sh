@@ -83,11 +83,19 @@ table inet vpn_gateway {
 		ip saddr $GW_SUBNET oifname "nordlynx" masquerade
 	}
 
-	# The tunnel's real path MTU is below its advertised one, so clients would
-	# stall on large packets. Rewrite MSS on SYNs to match the actual route MTU.
+	# Clients hit the same MTU blackhole as this box does - their HTTPS pages
+	# half-load or hang while ping and DNS look fine. See 04-nordvpn-setup.sh
+	# for why the MSS is a fixed 1340 rather than 'rt mtu'.
 	chain forward_mss {
 		type filter hook forward priority mangle; policy accept;
-		oifname "nordlynx" tcp flags syn tcp option maxseg size set rt mtu
+		oifname "nordlynx" tcp flags syn tcp option maxseg size set 1340
+	}
+
+	# Kept in sync with 04-nordvpn-setup.sh, which writes this same table with
+	# only this chain - running 05 after 04 replaces it with the full set.
+	chain output_mss {
+		type filter hook output priority mangle; policy accept;
+		oifname "nordlynx" tcp flags syn tcp option maxseg size set 1340
 	}
 }
 EOF

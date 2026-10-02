@@ -83,12 +83,27 @@ blocks the leaked direct path - so you get zero connectivity. Check with
 `ip rule show`: if the `not from all fwmark 0xe1f1 lookup 205` rule is missing,
 that's it. Fix: `nordvpn disconnect && nordvpn connect`.
 
-**Ping works, DNS works, but every HTTPS request hangs.** MTU blackhole:
-NordLynx advertises MTU 1420 while the real path MTU is ~1390, so mid-sized
-packets vanish without any "fragmentation needed" error. Confirm by probing:
-`ping -M do -s 1360 1.1.1.1` succeeds while `-s 1372` fails. Fix is the udev
-rule in `04-nordvpn-setup.sh` clamping the tunnel to 1380, plus MSS clamping
-in `05-vpn-gateway.sh` for forwarded client traffic.
+**Ping works, DNS works, but HTTPS hangs or pages half-load.** MTU blackhole,
+and the most misleading failure of the lot - it looks like DNS filtering or a
+dead VPN, but it's neither. NordLynx advertises MTU 1420 while the real path
+MTU is ~1390, so mid-sized packets vanish with no "fragmentation needed" reply.
+Small packets (ping, DNS) sail through while every TLS handshake dies, so the
+VPN reports perfectly healthy. Raw TCP to port 443 connects; `curl` then hangs.
+
+Confirm by probing: `ping -M do -s 1360 1.1.1.1` succeeds while `-s 1372` fails.
+
+Note `nordvpn set` has no MTU option, and nordvpnd re-asserts 1420 *after* the
+interface appears, so it beats any udev rule. Hence two defences, in
+`04-nordvpn-setup.sh`:
+
+- **MSS clamping** in nftables (fixed 1340, not `rt mtu` - that reads the bogus
+  1420 and clamps to 1380, still too big). This is the load-bearing fix: it
+  works the instant the tunnel reconnects and is immune to the MTU race. It
+  lives in our own `vpn_gateway` table so Nord's reconnects don't drop it.
+- **A 60s MTU timer**, since MSS clamping can't help UDP/QUIC (streaming).
+
+Verify after a reconnect: MTU will read 1420 for up to a minute, but HTTPS
+should already work - that's the clamp doing its job.
 
 **Clients on the gateway port never get a DHCP lease.** Nord's kill-switch
 firewall drops the requests before dnsmasq sees them - its input chain is

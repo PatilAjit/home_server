@@ -90,6 +90,14 @@ packets vanish without any "fragmentation needed" error. Confirm by probing:
 rule in `04-nordvpn-setup.sh` clamping the tunnel to 1380, plus MSS clamping
 in `05-vpn-gateway.sh` for forwarded client traffic.
 
+**Clients on the gateway port never get a DHCP lease.** Nord's kill-switch
+firewall drops the requests before dnsmasq sees them - its input chain is
+`policy drop` and only accepts source addresses in the private ranges, but a
+DHCP client has no address yet and sends from `0.0.0.0`. The symptom is
+baffling: `tcpdump -i <port> port 67` shows requests arriving every few
+seconds while dnsmasq logs nothing at all. Fix: `nordvpn allowlist add port 67
+protocol UDP` (done by `05-vpn-gateway.sh`).
+
 **`apt` can't resolve hostnames while the VPN is up.** Nord's firewall drops
 DNS to any LAN address on purpose (anti-leak), so the router stops resolving
 for this box. Fix: point the system resolver at a public DNS directly, as

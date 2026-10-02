@@ -59,6 +59,15 @@ dhcp-option=6,$GW_ADDR
 EOF
 systemctl restart dnsmasq
 
+# Nord's killswitch firewall would otherwise swallow every DHCP request before
+# dnsmasq sees it: its input chain is 'policy drop', and the only non-tunnel
+# exception accepts source addresses in the private ranges. A DHCP client has
+# no address yet, so it sends from 0.0.0.0 - matching nothing, it gets dropped.
+# The symptom is baffling (packets visible in tcpdump, zero DHCP log entries),
+# so allowlist the ports via Nord's own CLI, which survives reconnects.
+nordvpn allowlist add port 67 protocol UDP
+nordvpn allowlist add port 68 protocol UDP
+
 # --- NAT + MSS clamping -----------------------------------------------------
 cat > /etc/nftables.conf << EOF
 #!/usr/sbin/nft -f

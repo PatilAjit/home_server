@@ -5,7 +5,14 @@
 set -euo pipefail
 
 LAN_SUBNET="${LAN_SUBNET:-192.168.0.0/24}"
-VPN_COUNTRY="${VPN_COUNTRY:-}"   # e.g. "South_Korea" - empty picks fastest server
+
+# Accepts anything `nordvpn connect` takes: a country ("United_States"), a city,
+# a server hostname, or a group. Use "Dedicated_IP" to pin the account's
+# dedicated address - without it you land on a random shared server and lose
+# the dedicated IP entirely. Empty picks Nord's fastest server.
+# `nordvpn groups` lists what's available; `nordvpn account` shows whether a
+# dedicated IP is active on the subscription.
+VPN_TARGET="${VPN_TARGET:-${VPN_COUNTRY:-}}"
 
 curl -sSL https://downloads.nordcdn.com/apps/linux/install.sh -o /tmp/nordvpn-install.sh
 sh /tmp/nordvpn-install.sh -n
@@ -26,7 +33,14 @@ fi
 # unreachable once the tunnel is up and killswitch is on.
 nordvpn allowlist add subnet "$LAN_SUBNET"
 nordvpn set killswitch on
-nordvpn set autoconnect on
+
+# Pass the target to autoconnect too, not just "on" - otherwise a reboot
+# reconnects to whatever Nord picks, which silently drops a dedicated IP.
+if [ -n "$VPN_TARGET" ]; then
+  nordvpn set autoconnect on "$VPN_TARGET"
+else
+  nordvpn set autoconnect on
+fi
 
 # NordLynx advertises MTU 1420 but the real path MTU is ~1390. Packets sized
 # in between are silently dropped - the kernel thinks they fit so it never
@@ -99,10 +113,14 @@ sed -i 's/^#*DNS=.*/DNS=1.1.1.1 1.0.0.1/' /etc/systemd/resolved.conf
 grep -q '^DNS=' /etc/systemd/resolved.conf || echo 'DNS=1.1.1.1 1.0.0.1' >> /etc/systemd/resolved.conf
 systemctl restart systemd-resolved
 
-if [ -n "$VPN_COUNTRY" ]; then
-  nordvpn connect "$VPN_COUNTRY"
+if [ -n "$VPN_TARGET" ]; then
+  nordvpn connect "$VPN_TARGET"
 else
   nordvpn connect
 fi
+
+# `nordvpn status` reports the server's shared entry IP, not the egress address,
+# so check the egress separately - this is what confirms a dedicated IP is live.
+curl -s --max-time 15 https://api.nordvpn.com/v1/helpers/ips/insights; echo
 
 nordvpn status

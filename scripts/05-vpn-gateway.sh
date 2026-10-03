@@ -107,7 +107,12 @@ systemctl enable --now nftables
 # into it, and the killswitch then blocks everything. Reconnect to rebuild them.
 nordvpn disconnect >/dev/null 2>&1 || true
 sleep 2
-nordvpn connect "${VPN_COUNTRY:-}" || nordvpn connect
+VPN_TARGET="${VPN_TARGET:-${VPN_COUNTRY:-}}"
+if [ -n "$VPN_TARGET" ]; then
+  nordvpn connect "$VPN_TARGET"
+else
+  nordvpn connect
+fi
 
 echo
 echo "Gateway ready on $GW_IFACE ($GW_ADDR), handing out $DHCP_START-$DHCP_END."

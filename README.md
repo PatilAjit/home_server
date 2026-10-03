@@ -52,13 +52,35 @@ scripts in order instead of redoing everything by hand.
    bash scripts/03-printer-setup.sh
    ```
 6. ```
-   NORDVPN_TOKEN='<token from my.nordaccount.com>' VPN_COUNTRY=South_Korea \
+   NORDVPN_TOKEN='<token from my.nordaccount.com>' VPN_TARGET=Dedicated_IP \
      bash scripts/04-nordvpn-setup.sh
    ```
 7. Optional - the VPN gateway port:
    ```
-   VPN_COUNTRY=South_Korea bash scripts/05-vpn-gateway.sh
+   VPN_TARGET=Dedicated_IP bash scripts/05-vpn-gateway.sh
    ```
+
+`VPN_TARGET` takes anything `nordvpn connect` accepts: a country
+(`United_States`), a city, a server hostname, or a group. `Dedicated_IP` pins
+the account's dedicated address - see below.
+
+## Dedicated IP
+
+The account has a NordVPN dedicated IP (a fixed US/New York address, as opposed
+to a shared server address). Connect with `nordvpn connect Dedicated_IP`;
+`nordvpn groups` lists available groups and `nordvpn account` shows whether the
+dedicated IP is still active on the subscription.
+
+Two things to know:
+
+- **Auto-connect must be given the target**, i.e. `nordvpn set autoconnect on
+  Dedicated_IP`. Plain `autoconnect on` reconnects to whatever Nord picks after
+  a reboot, silently dropping you onto a shared address.
+- **`nordvpn status` does not show the dedicated IP.** It reports the server's
+  shared entry IP. To confirm the egress address, query it directly:
+  ```
+  curl -s https://api.nordvpn.com/v1/helpers/ips/insights
+  ```
 
 ## Secrets
 

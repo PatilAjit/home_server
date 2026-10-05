@@ -127,6 +127,15 @@ interface appears, so it beats any udev rule. Hence two defences, in
 Verify after a reconnect: MTU will read 1420 for up to a minute, but HTTPS
 should already work - that's the clamp doing its job.
 
+**The printer can't be discovered on the network.** `avahi-daemon` is missing.
+cupsd is configured with `BrowseLocalProtocols dnssd` but depends on Avahi to
+do the actual mDNS advertising - without it the printer is shared and works
+fine by direct address (`ipp://<ip>:631/printers/<name>`), yet broadcasts
+nothing, so it looks simply absent to every client. Check with
+`ss -ulpn | grep 5353` (nothing listening = no advertising) and confirm the fix
+with `avahi-browse -art | grep -i 'Internet Printer'`. Installing Avahi is also
+what enables AirPrint (iOS/macOS) and Mopria (Android) discovery.
+
 **Clients on the gateway port never get a DHCP lease.** Nord's kill-switch
 firewall drops the requests before dnsmasq sees them - its input chain is
 `policy drop` and only accepts source addresses in the private ranges, but a

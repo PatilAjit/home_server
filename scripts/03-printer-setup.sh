@@ -5,8 +5,14 @@ set -euo pipefail
 PRINTER_NAME="${PRINTER_NAME:-Epson-ET-2850}"
 MODEL_HINT="${PRINTER_MODEL_HINT:-ET-2850}"   # substring to match in the model name
 
-DEBIAN_FRONTEND=noninteractive apt-get -y install cups printer-driver-escpr
-systemctl enable --now cups
+# avahi-daemon is NOT optional: cupsd is configured with
+# 'BrowseLocalProtocols dnssd' but relies on Avahi to do the actual mDNS
+# advertising. Without it the printer is shared and reachable by direct
+# address, yet broadcasts nothing - so no client can auto-discover it and it
+# simply appears absent from the network. Installing it is also what gets
+# AirPrint (iOS/macOS) and Mopria (Android) discovery working for free.
+DEBIAN_FRONTEND=noninteractive apt-get -y install cups printer-driver-escpr avahi-daemon avahi-utils
+systemctl enable --now cups avahi-daemon
 
 USB_URI=$(lpinfo -v 2>/dev/null | grep -i usb | grep -i EPSON | awk '{print $2}' | head -1)
 if [ -z "$USB_URI" ]; then
@@ -42,3 +48,7 @@ cupsctl --remote-any --share-printers --remote-admin
 echo
 echo "Printer '$PRINTER_NAME' added and shared. CUPS web UI: http://<this-box-ip>:631"
 lpstat -p -d
+echo
+echo "Verify it is actually discoverable on the network (should list the printer"
+echo "as 'Internet Printer' - if this is empty, clients will not find it):"
+avahi-browse -art 2>/dev/null | grep -i 'Internet Printer' | head -4

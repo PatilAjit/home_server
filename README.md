@@ -59,6 +59,10 @@ scripts in order instead of redoing everything by hand.
    ```
    VPN_TARGET=Dedicated_IP bash scripts/05-vpn-gateway.sh
    ```
+8. Optional - keep the printer's ink flowing:
+   ```
+   bash scripts/06-ink-maintenance.sh
+   ```
 
 `VPN_TARGET` takes anything `nordvpn connect` accepts: a country
 (`United_States`), a city, a server hostname, or a group. `Dedicated_IP` pins
@@ -91,6 +95,28 @@ Nothing in this repo contains real credentials. Keep your own copy of:
 
 in a local, gitignored file (see `secrets.env.example` for the shape) or your
 password manager - never commit them.
+
+## Ink maintenance
+
+The EcoTank's print head clogs if it sits unused, so `06-ink-maintenance.sh`
+prints an all-channel test page every 10 days. The page is deliberately not
+just solid blocks: it also has partial-density ramps, fine 6-8pt black text and
+hairlines, because nozzles fail at low duty cycles first and a flood fill hides
+that. If a channel is starting to clog, the faint end of its ramp breaks up
+before anything else on the page does.
+
+```
+systemctl list-timers printer-ink-maintenance.timer   # when it next runs
+journalctl -u printer-ink-maintenance.service         # what it has done
+PS_OUT=/tmp/p.ps /usr/local/sbin/printer-ink-maintenance.sh  # preview, prints nothing
+rm /var/lib/printer-ink-maintenance/last-run \
+  && /usr/local/sbin/printer-ink-maintenance.sh        # force one now
+```
+
+The timer runs daily and the 10-day interval is enforced by the script against
+a stamp file, so reboots and downtime can't drift the cadence or double-print.
+It skips a cycle if anything is already queued, so pages don't pile up and all
+spool out at once when a jammed or paper-less printer comes back.
 
 ## Troubleshooting
 
